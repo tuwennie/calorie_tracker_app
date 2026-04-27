@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/api_service.dart';
 import '../services/database_service.dart';
 
@@ -34,6 +35,63 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
+          // Dashboard kartı ekledik
+          StreamBuilder<QuerySnapshot>(
+            stream: DatabaseService().getDailyLogs(),
+            builder: (context, snapshot) {
+              // Veri henüz gelmediyse ince bir yüklenme çubuğu göster
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const LinearProgressIndicator();
+              }
+
+              double totalKcal = 0;
+              if (snapshot.hasData) {
+                // Bugün eklenen her yemeğin kalorisini döngüyle topla
+                for (var doc in snapshot.data!.docs) {
+                  totalKcal += (doc['calories'] as num).toDouble();
+                }
+              }
+
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(25),
+                margin: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.green.shade700, Colors.green.shade400],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.green.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      "Bugün Toplam Alınan",
+                      style: TextStyle(color: Colors.white70, fontSize: 16),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "${totalKcal.toStringAsFixed(1)} kcal",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          // Dashboard bitti, altında Arama Çubuğu devam ediyor
           // Arama Giriş Alanı
           Padding(
             padding: const EdgeInsets.all(12.0),
@@ -41,7 +99,9 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: InputDecoration(
                 hintText: "Besin Ara (Örn: Ekmek, Elma...)",
                 suffixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               onSubmitted: _search,
             ),
@@ -49,26 +109,35 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // Yükleniyor simgesi veya Liste
           _isLoading
-              ? const Expanded(child: Center(child: CircularProgressIndicator()))
+              ? const Expanded(
+                  child: Center(child: CircularProgressIndicator()),
+                )
               : Expanded(
                   child: ListView.builder(
                     itemCount: _searchResults.length,
                     itemBuilder: (context, index) {
                       final product = _searchResults[index];
-                      final calories = product['nutriments']?['energy-kcal_100g'] ?? 0;
+                      final calories =
+                          product['nutriments']?['energy-kcal_100g'] ?? 0;
 
                       return ListTile(
                         leading: product['image_small_url'] != null
                             ? Image.network(
                                 product['image_small_url'],
                                 width: 50,
-                                errorBuilder: (c, e, s) => const Icon(Icons.fastfood),
+                                errorBuilder: (c, e, s) =>
+                                    const Icon(Icons.fastfood),
                               )
                             : const Icon(Icons.fastfood),
-                        title: Text(product['product_name'] ?? "Bilinmeyen Ürün"),
+                        title: Text(
+                          product['product_name'] ?? "Bilinmeyen Ürün",
+                        ),
                         subtitle: Text("100g için: $calories kcal"),
                         trailing: IconButton(
-                          icon: const Icon(Icons.add_circle_outline, color: Colors.green),
+                          icon: const Icon(
+                            Icons.add_circle_outline,
+                            color: Colors.green,
+                          ),
                           onPressed: () {
                             // Dialog penceresini açan fonksiyonu çağırıyoruz
                             _showAddDialog(product);
@@ -85,7 +154,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Miktar Soran Dialog Penceresi
   void _showAddDialog(Map<String, dynamic> product) {
-    final TextEditingController amountController = TextEditingController(text: "100");
+    final TextEditingController amountController = TextEditingController(
+      text: "100",
+    );
     final String name = product['product_name'] ?? "Bilinmeyen Ürün";
 
     showDialog(
@@ -117,13 +188,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 try {
                   // 1. Değerleri hazırla
-                  double amount = double.tryParse(amountController.text) ?? 100.0;
-                  
+                  double amount =
+                      double.tryParse(amountController.text) ?? 100.0;
+
                   // Kaloriyi güvenli bir şekilde al ve double'a çevir
                   var kcalRaw = product['nutriments']?['energy-kcal_100g'];
-                  double kcalPer100 = double.tryParse(kcalRaw.toString()) ?? 0.0;
+                  double kcalPer100 =
+                      double.tryParse(kcalRaw.toString()) ?? 0.0;
 
-                  print("DEBUG: Gönderilen veriler -> Ad: $name, Kcal: $kcalPer100, Miktar: $amount");
+                  print(
+                    "DEBUG: Gönderilen veriler -> Ad: $name, Kcal: $kcalPer100, Miktar: $amount",
+                  );
 
                   // 2. Firebase servisini çağır
                   await DatabaseService().logFood(name, kcalPer100, amount);
